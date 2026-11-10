@@ -24,9 +24,22 @@ COLUMN_KEYWORDS: dict[str, tuple[str, ...]] = {
     "role": ("talent", "role", "pic", "resource", "assignee", "penanggung"),
     "start": ("start", "mulai", "begin"),
     "end": ("end", "finish", "selesai", "akhir"),
-    "workdays": ("wd", "working day", "hari kerja", "duration", "durasi", "days"),
+    "workdays": (
+        "work days",
+        "working days",
+        "wd",
+        "working day",
+        "hari kerja",
+        "duration",
+        "durasi",
+        "days",
+    ),
+    "effort": ("effort (md)", "effort", "person days", "man days"),
+    "acceptance": ("kriteria selesai", "acceptance criteria"),
+    "support_role": ("role pendukung", "supporting role"),
     "item_id": ("wbs", "id", "kode", "no"),
     "name": (
+        "elemen wbs",
         "work package",
         "workstream",
         "item",
@@ -54,6 +67,9 @@ class ColumnMapping(BaseModel):
     start: int
     end: int
     workdays: int | None = None
+    effort: int | None = None
+    acceptance: int | None = None
+    support_role: int | None = None
 
 
 @dataclass
@@ -92,9 +108,21 @@ def _normalise_id(value: Any) -> str:
 
 
 def _match_header(row: tuple[Any, ...], sheet: str, index: int) -> ColumnMapping | None:
-    cells = [str(c).strip().lower() if c is not None else "" for c in row]
+    cells = [re.sub(r"\s+", " ", str(c).strip().lower()) if c is not None else "" for c in row]
     found: dict[str, int] = {}
     for fieldname, keywords in COLUMN_KEYWORDS.items():
+        exact = next(
+            (
+                col
+                for keyword in keywords
+                for col, text in enumerate(cells)
+                if text == keyword and col not in found.values()
+            ),
+            None,
+        )
+        if exact is not None:
+            found[fieldname] = exact
+            continue
         for col, text in enumerate(cells):
             if not text or col in found.values():
                 continue
@@ -108,6 +136,43 @@ def _match_header(row: tuple[Any, ...], sheet: str, index: int) -> ColumnMapping
     if not all(k in found for k in REQUIRED):
         return None
     return ColumnMapping(sheet=sheet, header_row=index, **found)
+
+
+def detect_candidates(content: bytes) -> list[ColumnMapping]:
+    """Rank tables across every sheet; prefer detailed hierarchical WBS tables."""
+    workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    candidates: list[tuple[float, ColumnMapping]] = []
+    for sheet in workbook.worksheets:
+        for index, row in enumerate(sheet.iter_rows(min_row=1, max_row=60, values_only=True)):
+            mapping = _match_header(row, sheet.title, index)
+            if mapping:
+                sample = list(
+                    sheet.iter_rows(
+                        min_row=index + 2,
+                        max_row=min(index + 302, sheet.max_row or 0),
+                        values_only=True,
+                    )
+                )
+                ids = (
+                    [str(r[mapping.item_id] or "") for r in sample if mapping.item_id < len(r)]
+                    if mapping.item_id is not None
+                    else []
+                )
+                depth = max((v.count(".") for v in ids if re.match(r"^\d", v)), default=0)
+                count = sum(bool(r[mapping.name]) for r in sample if mapping.name < len(r))
+                score = depth * 100 + min(count, 200) + (30 if mapping.item_id is not None else 0)
+                score -= (
+                    100
+                    if any(
+                        w in sheet.title.lower()
+                        for w in ["ringkasan", "summary", "effort per role"]
+                    )
+                    else 0
+                )
+                candidates.append((score, mapping))
+                break
+    workbook.close()
+    return [m for _, m in sorted(candidates, key=lambda pair: pair[0], reverse=True)]
 
 
 def detect_columns(content: bytes) -> ColumnMapping:
@@ -128,12 +193,9 @@ def detect_columns(content: bytes) -> ColumnMapping:
     WbsFormatError
         If no sheet has a header row with name, start, and end columns.
     """
-    workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-    for sheet in workbook.worksheets:
-        for index, row in enumerate(sheet.iter_rows(min_row=1, max_row=30, values_only=True)):
-            mapping = _match_header(row, sheet.title, index)
-            if mapping:
-                return mapping
+    candidates = detect_candidates(content)
+    if candidates:
+        return candidates[0]
     raise WbsFormatError(
         "Tabel WBS tidak dikenali. Pastikan ada baris judul kolom dengan nama item, "
         "tanggal mulai, dan tanggal selesai."
@@ -212,9 +274,12 @@ def read_wbs(
         return row[index]
 
     raw: list[dict[str, Any]] = []
-    for row in rows:
+    for source_row, row in enumerate(rows, mapping.header_row + 2):
         name = cell(row, mapping.name)
         if name is None or str(name).strip() == "":
+            continue
+        identifier = str(cell(row, mapping.item_id) or "").strip()
+        if identifier.upper() in {"UP", "TOTAL", "GRAND TOTAL"}:
             continue
         raw.append(
             {
@@ -223,7 +288,20 @@ def read_wbs(
                 else "",
                 "name": str(name).strip(),
                 "description": str(cell(row, mapping.description) or "").strip(),
-                "role": str(cell(row, mapping.role) or "").strip(),
+                "role": ", ".join(
+                    filter(
+                        None,
+                        [
+                            str(cell(row, mapping.role) or "").strip(),
+                            str(cell(row, mapping.support_role) or "").strip(),
+                        ],
+                    )
+                ),
+                "source_row": source_row,
+                "source_effort_days": cell(row, mapping.effort)
+                if isinstance(cell(row, mapping.effort), (int, float))
+                else None,
+                "acceptance": str(cell(row, mapping.acceptance) or ""),
                 "start": _as_date(cell(row, mapping.start)),
                 "end": _as_date(cell(row, mapping.end)),
                 "workdays": cell(row, mapping.workdays),
@@ -256,6 +334,10 @@ def read_wbs(
                 end=r["end"],
                 workdays=float(workdays) if workdays is not None else None,
                 group=names_by_id.get(parent, ""),
+                source_sheet=mapping.sheet,
+                source_row=r["source_row"],
+                source_effort_days=r["source_effort_days"],
+                acceptance=r["acceptance"],
             )
         )
 
