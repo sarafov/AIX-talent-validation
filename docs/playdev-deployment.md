@@ -29,4 +29,4 @@ unchanged when absent. Do not configure it in the existing Vercel project.
 
 Model credentials are still supplied through the dashboard per session. Do not
 add personal talent workbooks, project documents, or API keys to the repository.
-Verify a demo estimation and an SLA document export after the app becomes ready.
+Verify the sample Workspace flow, inventory import, and decision-plan download after the app becomes ready. This management app has no SLA drafting.
