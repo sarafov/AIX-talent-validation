@@ -1,145 +1,76 @@
-# AIX talent mapping and assignment
+# Management validation and staffing
 
-Open **Pemetaan & Penugasan** after estimating a project, or open it directly
-to upload an existing validation workbook.
+Workspace stages: Sources, Project Information, Role Scope, Breakdown & Skills,
+FTE Summary, Talent, and Gaps & Actions.
 
-## Workflow
+## Evidence and approval
 
-1. Load the current estimation result or upload a validation workbook containing
-   `Capability`, `Breakdown_WBS`, and `Ringkasan`.
-2. Upload `Talent Capability Breakdown.xlsx`. The first header groups skills by
-   role; the second header identifies each skill. Every respondent is eligible
-   for every project role. Primary and preferred roles are informational only.
-3. Review each talent's current workload and capacity. You can add a
-   `FTE` or `Current FTE` column to the talent workbook (including column E),
-   with its label in either header row and values from row 3. Both labels mean
-   current workload; they do not mean total capacity. `Capacity FTE` is also supported. Without
-   current workload, availability remains unknown. Capacity defaults to 1 FTE.
-   Numeric Excel cells work regardless of comma/dot display settings. Text
-   values such as `0,5`, `0.5`, and `50%` are accepted. An FTE formula must have
-   a calculated result saved in the workbook; the app reports uncached formulas
-   and their cell addresses instead of guessing a workload. The upload summary
-   identifies the FTE column and the number of successfully loaded values.
-4. Review project demand, WBS classification, skill weights, and target levels.
-   You can add catalog skills or remove requirements. The default target is 3.
-   Requested demand defaults to `Ringkasan` → `Diminta (FTE)` (column C), or 0
-   when absent. The current estimator run uses its requested role inputs.
-   Phase 1 displays requested FTE, project existing FTE, UCP average/peak,
-   Bottom-up average/peak, and their signed percentage difference together.
-   There is no FTE method selector. Difference uses the average values:
-   `(UCP average - Bottom-up average) / Bottom-up average`; a zero denominator
-   displays an em dash. Standard exported workbooks without cached formula
-   results are recalculated from Parameter, Breakdown_WBS, and UCP inputs
-   using the estimation engine. Saved numeric estimates are preserved.
-   Unsupported or incomplete inputs remain unavailable with an import warning.
-   Edit requested FTE per role in Phase 2 to set the final combination. The
-   assignment summary shows requested, selected count, allocated, and remaining FTE.
-   `Engineer` in older rosters and sessions is displayed as `AI Engineer`.
-5. Compare all candidates and open their skill details. Select any talent,
-   change their assigned FTE, or replace them with another candidate.
-6. Download the assignment workbook, including the full ranking, human choices,
-   per-skill calculations, requirements, and outstanding capacity warnings.
-   Save the planning session as JSON to resume it after leaving the page.
+The reader examines workbook sheets and exposes candidates and source coordinates.
+The reviewer can select another sheet and reanalyze. Dates, effort, and acceptance
+text are retained when available. Supporting PDF, DOCX, and text provide context;
+scanned PDFs require OCR. Conflicting dates become warnings. AI facts without
+verifiable quotations are marked inferred. Rule mode is clearly labeled.
 
-Talent data and assignments stay in browser memory between requests and are
-processed in server memory. They are not committed to GitHub, bundled in the
-public deployment, stored in a database, or sent to the LLM for ranking. Saved
-session files contain personal talent data; keep them in your own workspace.
-The public app starts empty. Closing or navigating away from the planning page
-discards unsaved planning inputs.
+Confirm project information and role scope before estimation. Additional roles
+can be included for the project, mapped, externalized, or excluded with reasons.
+Custom roles use generic UCP assumptions requiring review. The master catalog is
+not extended automatically. Review every WBS-role row and explicitly exclude any
+unmapped work package before approving. Retain outside-catalog skills as gaps.
 
-## Scoring policy
+## Estimation
 
-The initial policy has three transparent components:
+Existing deterministic UCP and bottom-up engines calculate effort and monthly FTE.
+Compare requested, average, peak, divergence, and monthly demand in Data / Design /
+Additional tabs. Select UCP or bottom-up monthly demand as the staffing baseline.
+Missing requested FTE remains unknown, never silently one person.
 
-| Component | Maximum | Calculation |
-| --- | ---: | --- |
-| Proficiency | 70 | Weighted average of `(level - 1) / 4` |
-| Target coverage | 20 | Weighted share of required skills where level meets the target |
-| Capacity | 10 | `min(available FTE / remaining assignment slot, 1)` |
+## Inventory and scoring
 
-The total is 0–100. Skill levels mean: 1 no experience, 2 basic, 3 intermediate,
-4 proficient, and 5 expert. Level 1 earns zero proficiency points. Missing
-proficiency also earns zero skill and coverage points and appears explicitly
-as unavailable in the detail view; it is never dropped from the denominator.
+Upload the two-header Data / Design inventory. Row 1 groups skills by role; row 2
+names each skill. Metadata includes Nama, Role Utama, Preferred Role, Assignment
+(or Tribe / Project), and Jumlah Assignment. Levels 1-5 mean no experience, basic,
+intermediate, advanced, expert. Missing cells remain unassessed. Unrecognized skill
+labels are preserved; conflicting duplicate assessments require reconciliation.
 
-Each requirement's starting weight is its WBS effective UCP weight: Simple 5,
-Average 10, Complex 15, multiplied by quantity and the supporting-role factor
-where applicable. When a skill appears on several WBS items, its weights add;
-the highest requested target applies. Reviewers can change individual weights
-and targets. Exact duplicate item/role/pillar/skill requirements are rejected.
+Every person is considered across roles regardless of primary/preferred role,
+team, or assignment count. Requirements are weighted by work-package baseline
+effort, divided equally among each package's skills.
 
-Available FTE is `max(0, capacity - current workload - all proposed allocations)`.
-The remaining assignment slot is the remaining demand for that role, capped
-at the candidate's capacity. Unknown current FTE or unknown role demand earns
-zero capacity points and a provisional label. When no demand remains, capacity
-adds zero points. Scores refresh when assignments or workload change. This is
-a ranking for the remaining need, not a frozen pre-allocation score.
+- Proficiency: weighted `(level - 1) / 4`; unassessed contributes zero.
+- Target coverage: weighted share meeting the reviewed target.
+- Score: `100 * (70 * proficiency + 20 * target coverage) / 90`.
+- Assessment completeness: weighted share with recorded assessments, shown separately.
 
-Current workload must refer to the same period as the proposed project.
-Allocations are conservatively concurrent and additive across roles. The app
-does not infer monthly workload or assume that two assignments do not overlap.
-Over-capacity and unknown-workload plans retain their warnings. A role's
-missing-selection alert appears only when requested FTE is positive and no
-talent is selected. Selecting a talent removes that alert; the summary still
-shows any remaining FTE. Roles with zero demand produce no role warnings.
-Choosing a talent does not constitute an approved assignment.
+These measures compare evidence and are not calibrated hiring predictions.
+Current assignments and counts remain visible when comparing/selecting people.
+There is no conversion from assignment count to current FTE or ranking penalty.
 
-The 70/20/10 weights are an initial planning policy, not a validated measure of
-job performance. Calibrate them against reviewed project outcomes. A human can
-choose a lower-ranked talent after considering skill gaps and context.
+## Allocation and coverage
 
-## Catalog compatibility
+Person-role-month allocations remain proposed until resource-owner confirmation
+is recorded and explicitly checked. An editable per-person/month planning ceiling
+defaults to 1 FTE; this assumption is not measured availability. Confirmation must
+account for existing commitments outside this project.
 
-The default catalog includes all 127 data-role skills and English definitions
-from the supplied capability sheet. The upstream design-role scope and skills
-remain available. Katalog Capability accepts either:
+A constrained flow calculation shares each person's ceiling across roles and work
+packages, preventing double counting. Monthly coverage is weighted by working days.
 
-- The system format: `Scope_Capability`, `Pilar_Skill`, and optional
-  `Skill_Definitions` sheets.
-- The flat format: `Role`, `Category`, `Skill`, `Definition` columns.
+- Capability: effort-weighted requirements where someone meets the target skill.
+- Proposed: demand supported by any proposed allocations.
+- Confirmed: demand supported by explicitly confirmed allocations.
+- Qualified: confirmed allocations whose person meets every critical package skill.
 
-The catalog download is compatible with the system format and includes the
-definition sheet. Talent skill matching uses role group, pillar, and skill,
-with case and punctuation normalization. Identical names in different role
-groups remain distinct self-assessment answers. Unrecognized columns are
-reported rather than guessed. A blank score filled with 1 in the supplied
-workbook is treated as level 1, as requested in the catalog preparation.
+Unknown requirements remain in the denominator. Missing assessments differ from
+recorded level 1. Gaps distinguish assessment, absent capability, proficiency,
+outside-catalog skills, and staffing shortfall. Team filters use role-level weights.
 
-## Import rules
+## Decisions and sessions
 
-Validation workbook import reads UCP classification and cached effective
-weights from `Breakdown_WBS`, and maps the rows of `Capability` to them.
-Bottom-up peak FTE comes from the first `Ringkasan` role table. Uncached FTE
-formulas are left unknown and must be entered by the reviewer. A live estimator
-run also supports UCP peak, UCP average, and bottom-up average demand.
+Build develops skills; Buy recruits/procures capability; Borrow uses help from
+another team or partner; Rephase changes timing/scope. Record owner, date, status,
+and notes. Actions alone never increase confirmed/qualified coverage. Humans
+make final assignments.
 
-The supplied survey's duplicate storage label was confirmed as
-`Data Warehouse / OLAP Architecture`, and the monitoring deployment label was
-confirmed as `Data Lineage Tracking` during preparation of the talent workbook.
-The app consumes the corrected talent workbook and does not infer additional
-survey-label corrections.
-
-## Deliverable-Based Resource SLA
-
-Open **Draf Resource SLA** after reviewing the assignment plan. Use the current
-human-selected assignments or upload a Talent Assignment Plan workbook. Names,
-roles, and allocated FTE come from selected assignments, never the ranked
-recommendations. The active catalog supplies editable scope suggestions.
-
-The draft reuses supporting documents selected in Validasi Baru. Additional
-KAK, project charter, PDF, DOCX, TXT, or Markdown documents can be uploaded here.
-When no usable project context exists, drafting requires supporting documents
-or a manually entered context. Scanned documents without text require OCR.
-Uploads are limited to five files and 4 MB in total per request.
-
-Project context is extracted locally on the server without an LLM call.
-Missing facts and acceptance criteria remain reviewer placeholders. Parts 3-6
-use editable general terms from the supplied SLA reference; generating a draft
-does not approve or assign resources.
-
-Every section and table cell can be edited, and resource rows can be added or
-removed. Word and PDF exports use the current edited draft. Download the JSON
-session to preserve it across page refreshes; switching dashboard menus retains
-the current draft and assignment plan in memory. No uploaded source document
-or talent data is bundled into the public application.
+Upstream edits invalidate affected approvals and allocation confirmations.
+Save/restore session JSON excludes keys and requires renewed approvals on restore.
+Download decision-plan JSON for review. SLA drafting is not included.

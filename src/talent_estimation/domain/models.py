@@ -128,6 +128,11 @@ class WbsItem(BaseModel):
     workdays: float | None = None
     group: str = ""
     source: Literal["wbs", "additional"] = "wbs"
+    source_file: str = ""
+    source_sheet: str = ""
+    source_row: int | None = None
+    source_effort_days: float | None = None
+    acceptance: str = ""
 
 
 class CapabilityNeed(BaseModel):
@@ -136,6 +141,9 @@ class CapabilityNeed(BaseModel):
     pillar: str
     skill: str
     reason: str = ""
+    target: int = Field(default=3, ge=2, le=5)
+    critical: bool = True
+    status: str = "catalog"
 
 
 class BreakdownRow(BaseModel):
