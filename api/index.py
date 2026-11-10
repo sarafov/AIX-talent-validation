@@ -49,7 +49,6 @@ from talent_estimation.llm import (
 from talent_estimation.skills import AGENT_CARDS
 from talent_estimation.skills.judgement import parse_request
 from talent_estimation.skills.schemas import ReclassifyRequest
-from talent_estimation.sla_api import router as sla_router
 from talent_estimation.staffing import (
     StaffingRequest,
     export_plan,
@@ -58,6 +57,7 @@ from talent_estimation.staffing import (
     read_talents,
     recommend,
 )
+from talent_estimation.workflow import router as workflow_router
 
 MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 """Total upload size per request. Vercel functions accept about 4.5 MB."""
@@ -552,4 +552,15 @@ async def validation_error(_: Any, exc: ValidationError) -> JSONResponse:
     return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
-app.include_router(sla_router)
+app.include_router(workflow_router)
+
+
+@app.exception_handler(LLMError)
+async def workflow_model_error(_: Any, exc: LLMError) -> JSONResponse:
+    """Report model failures without echoing credentials or document contents."""
+    return JSONResponse(
+        status_code=502,
+        content={
+            "detail": "Model tidak dapat menyelesaikan analisis. Periksa koneksi, model dan batas output di Pengaturan, atau coba mode aturan tanpa API key."
+        },
+    )
